@@ -1,0 +1,40 @@
+//Parsing Email received from Oracle Cloud to get state of instance
+var state_temp = email.subject.split(":")[0];
+var state = state_temp.replace(" Alert","");
+
+var host_temp1 = email.subject.split(" for ")[1];
+var host_temp2 = host_temp1.split(" is ")[0];
+var hostname = host_temp2.split(".")[0];
+
+
+//State which we got in email, is string and Service Now couldnot map the string to its Severity list. Hence we are manipulating its value to index value of choice list.
+if(state == "Warning") { state = 4; }
+else if((state == "Critical") ) { state = 1;} 
+else {state = 0;}
+
+//get Instance name and Instance_id using IP address from Virtual Machine table for mapping it to Event.
+var instance_id='';
+var instance_name='';
+
+//querying OC Virtual Machine table for ip
+var getIns = new GlideRecord("x_xr_oracle_cloud_obmcs_instances");
+getIns.addQuery('display_name','=', hostname);
+getIns.query();
+if(getIns.next()){
+ instance_id =  getIns.getValue("sys_id");
+ instance_name = getIns.getValue("name");
+}
+
+if (instance_id != ''){
+ //Creating Event
+ 
+ current.source = "Oracle Cloud";
+ current.description = email.subject;
+ current.cmdb_ci = instance_id; //cmdb_ci is assigned to map the event and its alert to corresponding instance.Since cmdb_ci is a reference field, it accept only primary key. So instance id is assigned.
+ current.severity = state; // severity is list , so we have to assign index value of choice.
+ current.node = hostname;
+ current.insert();
+}
+else{
+ gs.error("Virtual Machine with name- "+hostname+"  not Found. Hence this Notification is Ignored!!");
+}
